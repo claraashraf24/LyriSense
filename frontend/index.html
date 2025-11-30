@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LyriSense – Emotion-based Song Recommender</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1>LyriSense</h1>
+        <p class="tagline">
+          Type how you feel. Get songs that match your mood.
+        </p>
+      </header>
+
+      <main class="app-main">
+        <section class="card input-card">
+          <label for="user-text" class="field-label"
+            >How are you feeling today?</label
+          >
+          <p class="field-help">
+            Describe your mood in your own words. Text and emojis are supported
+            🧠🎵
+          </p>
+          <textarea
+            id="user-text"
+            rows="4"
+            placeholder="e.g. I feel excited but a bit anxious about tomorrow..."
+          ></textarea>
+
+          <div class="filters-row">
+            <div class="filter-field">
+              <label for="artist-filter">Artist (optional)</label>
+              <input
+                id="artist-filter"
+                type="text"
+                placeholder="e.g. Taylor Swift"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="sort-by">Sort by</label>
+              <select id="sort-by">
+                <option value="similarity">Similarity</option>
+                <option value="popularity">Popularity</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="recommend-btn">Get Recommendations</button>
+
+          <p class="hint">
+            Tip: Try mixed feelings like “sad but hopeful” or “tired but
+            grateful”.
+          </p>
+        </section>
+
+        <section class="card results">
+          <div id="emotion-output" class="emotion-output placeholder">
+            Detected emotion will appear here.
+          </div>
+
+          <div id="songs-output" class="songs-output placeholder">
+            Recommended songs will show up here.
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span>
+          Built with FastAPI, scikit-learn & a Spotify lyrics dataset · Project:
+          LyriSense
+        </span>
+      </footer>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

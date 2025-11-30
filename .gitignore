@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+*.pyo
+.env
+.env.*
+.settings/
+models/*.joblib
+models/*.npz
+data/raw/*
+data/cleaned/*.csv
+# VS Code
+.vscode/
+# Windows junk
+Thumbs.db
