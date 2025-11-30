@@ -1,38 +1,39 @@
+# src/similarity.py
+from __future__ import annotations
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.model import predict_emotion
-from src.utils import (
-    songs_with_pred,
-    song_vectors,
-)
-from src.spotify_helpers import fetch_spotify_metadata
+from src.utils import songs_with_pred, song_vectors
+from src.spotify_helpers import fetch_spotify_metadata  # optional future use
 
 
+# Heuristic keywords to extract emotionally-relevant lyric snippets
 EMOTION_KEYWORDS = {
     "sadness": [
         "sad", "cry", "crying", "alone", "lonely", "hurt",
-        "tears", "broken", "goodbye", "lost", "empty", "missing you"
+        "tears", "broken", "goodbye", "lost", "empty", "missing you",
     ],
     "joy": [
         "happy", "happiness", "joy", "smile", "laugh", "sunshine",
-        "love my life", "feels so good", "celebrate"
+        "love my life", "feels so good", "celebrate",
     ],
     "love": [
         "love", "loving you", "heartbeat", "kiss", "together",
-        "baby", "darling", "hold you", "forever"
+        "baby", "darling", "hold you", "forever",
     ],
     "anger": [
         "angry", "rage", "hate", "screaming", "fighting", "fight",
-        "mad at", "pissed", "burn", "destroy"
+        "mad at", "pissed", "burn", "destroy",
     ],
     "fear": [
         "afraid", "scared", "fear", "anxious", "anxiety", "worry",
-        "nightmare", "darkness", "run away", "danger"
+        "nightmare", "darkness", "run away", "danger",
     ],
     "surprise": [
         "suddenly", "out of nowhere", "didn't expect", "surprise",
-        "shocked", "again and again", "can't believe"
+        "shocked", "again and again", "can't believe",
     ],
 }
 
@@ -40,6 +41,11 @@ EMOTION_KEYWORDS = {
 def extract_lyric_snippet(row, max_len: int = 200) -> str | None:
     """
     Try to extract a short snippet of lyrics that supports the predicted emotion.
+
+    Strategy:
+      1) Prefer raw 'lyrics' if present, otherwise 'clean_lyrics'.
+      2) Try to find a window around emotion-specific keywords.
+      3) Fallback: first non-empty lines or first max_len characters.
     """
     # Prefer raw 'lyrics' if present, otherwise 'clean_lyrics'
     text = str(row.get("lyrics") or row.get("clean_lyrics") or "").strip()
@@ -48,7 +54,6 @@ def extract_lyric_snippet(row, max_len: int = 200) -> str | None:
 
     emotion = str(row.get("pred_emotion") or "").lower()
     keywords = EMOTION_KEYWORDS.get(emotion, [])
-
     lower_text = text.lower()
 
     # 1) Try to find a keyword window
@@ -75,7 +80,6 @@ def extract_lyric_snippet(row, max_len: int = 200) -> str | None:
     return snippet or None
 
 
-
 def recommend_songs_from_text(
     user_text: str,
     top_k: int = 5,
@@ -85,20 +89,41 @@ def recommend_songs_from_text(
     sort_by: str = "similarity",   # "similarity" or "popularity"
 ):
     """
-    Main recommendation engine:
-      1) Predict emotion from text
-      2) Filter songs by emotion (fallback to all songs)
-      3) Optional: filter by artist / country
-      4) Compute cosine similarities
-      5) Sort by similarity or popularity
+    Main recommendation engine used by the API.
+
+    Pipeline:
+      1) Predict emotion from user_text using src.model.predict_emotion.
+      2) Optionally filter songs to those with the same predicted emotion.
+         - If fewer than min_same_emotion songs remain, fall back to all songs.
+      3) Optional: filter by artist name (contains, case-insensitive).
+      4) Compute cosine similarity between user vector and song TF-IDF vectors.
+      5) Sort by similarity (default) or popularity (if column exists).
       6) Return top_k songs, each with a lyric snippet.
+
+    Args:
+        user_text: Free-form text describing how the user feels.
+        top_k: Number of songs to return.
+        same_emotion_only: If True, prioritize songs whose predicted emotion
+                           matches the user emotion.
+        min_same_emotion: Minimum number of same-emotion songs required before
+                          we fall back to using all songs.
+        artist_filter: Optional substring to filter by artist name.
+        sort_by: "similarity" (default) or "popularity".
+
+    Returns:
+        dict with:
+            - user_emotion_id
+            - user_emotion
+            - user_confidence
+            - top2_emotions: list of (id, name, confidence)
+            - recommendations: list of dicts with song metadata
     """
 
     # --- 1. Predict emotion ---
     pred = predict_emotion(user_text)
     user_vec = pred["vector"]
     user_emotion_id = pred["emotion_id"]
-    top2 = pred["top2"]   # list of (id, name, conf)
+    top2 = pred["top2"]  # list of (id, name, conf)
 
     # --- 2. Filter songs by emotion (optional) ---
     if same_emotion_only:
@@ -106,6 +131,7 @@ def recommend_songs_from_text(
         idx = np.where(mask.values)[0]
 
         if len(idx) < min_same_emotion:
+            # Not enough songs of that emotion → use all songs
             filtered_vectors = song_vectors
             filtered_songs = songs_with_pred.reset_index(drop=True)
         else:
@@ -125,7 +151,6 @@ def recommend_songs_from_text(
         filtered_vectors = filtered_vectors[idx_artist]
         filtered_songs = filtered_songs.iloc[idx_artist].reset_index(drop=True)
 
-
     # If after filtering there is nothing left, just return empty recs
     if len(filtered_songs) == 0:
         return {
@@ -138,8 +163,6 @@ def recommend_songs_from_text(
 
     # --- 3. Similarity ---
     sims = cosine_similarity(user_vec, filtered_vectors)[0]  # shape (n_songs,)
-
-    # Attach similarity to the DataFrame
     filtered_songs = filtered_songs.copy()
     filtered_songs["similarity"] = sims
 
@@ -165,7 +188,8 @@ def recommend_songs_from_text(
                 ascending=False,
             )
 
-        top_songs = sorted_songs.head(top_k)
+    # Take top_k after sorting (bugfix: ensure this runs in all branches)
+    top_songs = sorted_songs.head(top_k)
 
     # --- 5. Build recommendations ---
     recs = []
@@ -180,7 +204,9 @@ def recommend_songs_from_text(
             "song_emotion_conf": float(row.get("pred_emotion_conf", 0.0)),
             "similarity": float(row["similarity"]),
             "lyric_snippet": snippet or "",
-            "popularity": float(row.get("popularity", 0.0)) if "popularity" in row else None,
+            "popularity": float(row.get("popularity", 0.0))
+            if "popularity" in row
+            else None,
         })
 
     return {

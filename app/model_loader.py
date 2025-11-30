@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, List
 
-import numpy as np
 import pandas as pd
 from scipy import sparse
 import joblib
-from sklearn.metrics.pairwise import cosine_similarity
+
 from src.model import predict_emotion as _predict_emotion_core
 from src.similarity import recommend_songs_from_text as _recommend_core
 
+# -----------------------------------------------------------------------------
+# Paths & constants
+# -----------------------------------------------------------------------------
 
-# Base paths (project root = one level up from /app)
+# Project root = one level up from /app
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_CLEAN = BASE_DIR / "data" / "cleaned"
 MODELS_DIR = BASE_DIR / "models"
@@ -28,24 +29,24 @@ EMOTION_ID_TO_NAME = {
 }
 EMOTION_NAME_TO_ID = {v: k for k, v in EMOTION_ID_TO_NAME.items()}
 
-# At the top
-EMOJI_TO_EMOTION_ID = {
-    "😊": 1, "😄": 1, "😁": 1, "😃": 1, "🥰": 2, "😍": 2,
-    "😭": 0, "😢": 0, "😞": 0, "😔": 0,
-    "😡": 3, "🤬": 3,
-    "😱": 4, "😨": 4, "😰": 4, "😟": 4,
-    "😮": 5, "😲": 5, "😯": 5, "🤯": 5,
-}
 
+# -----------------------------------------------------------------------------
+# Resource loading (optional helper for deployment / debugging)
+# -----------------------------------------------------------------------------
 
 @lru_cache
 def load_resources():
     """
     Load and cache:
-    - TF-IDF vectorizer
-    - Logistic Regression emotion classifier
-    - Song TF-IDF matrix
-    - Songs dataframe with predicted emotions
+      - TF-IDF vectorizer
+      - Logistic Regression emotion classifier
+      - Song TF-IDF matrix
+      - Songs dataframe with predicted emotions
+
+    Note:
+        The core modeling logic lives in src.model / src.similarity.
+        This helper is mainly useful for debugging or if you want to
+        inspect the serving artifacts from a REPL.
     """
     tfidf = joblib.load(MODELS_DIR / "tfidf_emotion.joblib")
     logreg = joblib.load(MODELS_DIR / "logreg_emotion.joblib")
@@ -55,24 +56,26 @@ def load_resources():
     return tfidf, logreg, song_vectors, songs_with_pred
 
 
+# -----------------------------------------------------------------------------
+# Public API used by FastAPI (thin wrappers)
+# -----------------------------------------------------------------------------
+
 def predict_emotion(text: str):
+    """
+    Thin wrapper around src.model.predict_emotion so that the FastAPI app
+    only imports from app.model_loader.
+
+    Args:
+        text: User input text describing their mood.
+
+    Returns:
+        dict with keys:
+          - emotion_id
+          - emotion
+          - confidence
+          - (optionally) vector
+    """
     return _predict_emotion_core(text)
-
-
-
-def _extract_emoji_emotions(text: str):
-    emoji_ids = []
-    chars = []
-
-    for ch in text:
-        if ch in EMOJI_TO_EMOTION_ID:
-            emoji_ids.append(EMOJI_TO_EMOTION_ID[ch])
-        else:
-            chars.append(ch)
-
-    cleaned_text = "".join(chars)
-    return cleaned_text, emoji_ids
-
 
 
 def recommend_songs_from_text(
@@ -83,8 +86,25 @@ def recommend_songs_from_text(
     sort_by: str = "similarity",   # "similarity" or "popularity"
 ):
     """
-    Thin wrapper around src.similarity.recommend_songs_from_text
-    so the FastAPI app only imports from app.model_loader.
+    Thin wrapper around src.similarity.recommend_songs_from_text.
+
+    This is the main entrypoint used by the /api/recommend endpoint.
+
+    Args:
+        user_text: Free-form text describing how the user feels.
+        top_k: Number of songs to return.
+        same_emotion_only: If True, restrict results to songs whose
+                           predicted emotion matches the user emotion.
+        artist_filter: Optional artist name to filter recommendations.
+        sort_by: Sort key, currently "similarity" or "popularity".
+
+    Returns:
+        dict with keys expected by main.py:
+          - user_emotion_id
+          - user_emotion
+          - user_confidence
+          - top2_emotions
+          - recommendations (list of dicts)
     """
     return _recommend_core(
         user_text=user_text,
@@ -93,4 +113,3 @@ def recommend_songs_from_text(
         artist_filter=artist_filter,
         sort_by=sort_by,
     )
-

@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <title>LyriSense – Emotion-based Song Recommender</title>
+
+    <!-- Make it look good on all screens -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Basic description for presentation / SEO -->
+    <meta
+      name="description"
+      content="LyriSense is an emotion-based music recommender. Type how you feel and get songs whose lyrics match your mood."
+    />
+
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -15,14 +25,17 @@
       </header>
 
       <main class="app-main">
-        <section class="card input-card">
-          <label for="user-text" class="field-label"
-            >How are you feeling today?</label
-          >
+        <!-- Input panel -->
+        <section class="card input-card" aria-labelledby="feeling-label">
+          <label id="feeling-label" for="user-text" class="field-label">
+            How are you feeling today?
+          </label>
+
           <p class="field-help">
             Describe your mood in your own words. Text and emojis are supported
             🧠🎵
           </p>
+
           <textarea
             id="user-text"
             rows="4"
@@ -48,7 +61,7 @@
             </div>
           </div>
 
-          <button id="recommend-btn">Get Recommendations</button>
+          <button id="recommend-btn" type="button">Get Recommendations</button>
 
           <p class="hint">
             Tip: Try mixed feelings like “sad but hopeful” or “tired but
@@ -56,12 +69,21 @@
           </p>
         </section>
 
-        <section class="card results">
-          <div id="emotion-output" class="emotion-output placeholder">
+        <!-- Results panel -->
+        <section class="card results" aria-label="Results">
+          <div
+            id="emotion-output"
+            class="emotion-output placeholder"
+            aria-live="polite"
+          >
             Detected emotion will appear here.
           </div>
 
-          <div id="songs-output" class="songs-output placeholder">
+          <div
+            id="songs-output"
+            class="songs-output placeholder"
+            aria-live="polite"
+          >
             Recommended songs will show up here.
           </div>
         </section>
@@ -69,8 +91,8 @@
 
       <footer class="app-footer">
         <span>
-          Built with FastAPI, scikit-learn & a Spotify lyrics dataset · Project:
-          LyriSense
+          Built with FastAPI, scikit-learn &amp; a Spotify lyrics dataset ·
+          Project: LyriSense
         </span>
       </footer>
     </div>

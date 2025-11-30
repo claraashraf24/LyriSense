@@ -11,18 +11,33 @@ from .model_loader import (
     recommend_songs_from_text,
 )
 
-app = FastAPI(title="LyriSense API", version="0.1.0")
+# -----------------------------------------------------------------------------
+# FastAPI app setup
+# -----------------------------------------------------------------------------
+
+app = FastAPI(
+    title="LyriSense API",
+    version="0.1.0",
+    description=(
+        "LyriSense: Mood-based music recommender.\n\n"
+        "Given a free-form text describing how the user feels, "
+        "the API predicts the dominant emotion and returns songs "
+        "whose lyrics match that emotional tone."
+    ),
+)
 
 # CORS – allow frontend from anywhere (file://, localhost, etc.)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # no cookies, so keep this False with "*"
+    allow_credentials=False,  # no cookies/sessions, so keep this False with "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------- Pydantic models ----------
+# -----------------------------------------------------------------------------
+# Pydantic models (request / response schemas)
+# -----------------------------------------------------------------------------
 
 class EmotionRequest(BaseModel):
     text: str
@@ -38,10 +53,8 @@ class RecommendRequest(BaseModel):
     text: str
     top_k: int = 5
     same_emotion_only: bool = True
-    artist: Optional[str] = None       # optional artist filter
-    sort_by: str = "similarity"        # "similarity" or "popularity"
-
-
+    artist: Optional[str] = None          # optional artist filter
+    sort_by: str = "similarity"           # "similarity" or "popularity"
 
 
 class SongOut(BaseModel):
@@ -53,10 +66,6 @@ class SongOut(BaseModel):
     similarity: float
     lyric_snippet: Optional[str] = None
     popularity: Optional[float] = None
-
-
-
-
 
 
 class TopEmotion(BaseModel):
@@ -73,15 +82,26 @@ class RecommendResponse(BaseModel):
     recommendations: List[SongOut]
 
 
-# ---------- Endpoints ----------
+# -----------------------------------------------------------------------------
+# Endpoints
+# -----------------------------------------------------------------------------
 
 @app.get("/health")
-def health():
+def health() -> dict:
+    """Simple health check endpoint for uptime checks."""
     return {"status": "ok"}
 
 
 @app.post("/api/predict", response_model=EmotionResponse)
-def api_predict(req: EmotionRequest):
+def api_predict(req: EmotionRequest) -> EmotionResponse:
+    """
+    Predict the dominant emotion of a free-form text snippet.
+
+    Request body:
+    {
+      "text": "i feel really anxious and overwhelmed about tomorrow"
+    }
+    """
     try:
         pred = predict_emotion(req.text)
     except ValueError as e:
@@ -95,13 +115,17 @@ def api_predict(req: EmotionRequest):
 
 
 @app.post("/api/recommend", response_model=RecommendResponse)
-def api_recommend(req: RecommendRequest):
+def api_recommend(req: RecommendRequest) -> RecommendResponse:
     """
-    Body must look like:
+    Recommend songs for a given user mood text.
+
+    Request body:
     {
-      "text": "...",
+      "text": "i feel stressed but hopeful",
       "top_k": 5,
-      "same_emotion_only": true
+      "same_emotion_only": true,
+      "artist": null,
+      "sort_by": "similarity"
     }
     """
     try:
@@ -112,12 +136,10 @@ def api_recommend(req: RecommendRequest):
             artist_filter=req.artist,
             sort_by=req.sort_by,
         )
-
-
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # result from similarity.recommend_songs_from_text:
+    # Expected result from model_loader / src.similarity:
     # {
     #   "user_emotion_id": ...,
     #   "user_emotion": ...,
